@@ -20,4 +20,11 @@ products = [
         "price": "Ghc 500.00",
         "image": "url(...)",
     },
+    {
+        "id": 4,
+        "name": "Cap",
+        "description": "maroon",
+        "price": "Ghc 150.00",
+        "image": "url(...)",
+    },
 ]
