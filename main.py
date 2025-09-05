@@ -33,30 +33,46 @@
 # POST /checkout/{user_id} → return an order summary (cart items + total).
 
 
-from fastapi import FastAPI
-from products import products
-from users import users
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from fastapi import HTTPException
+
+# Assume these are your data sources; they need to be defined
+# somewhere, e.g., in products.py and users.py
+# For this example, I'll define them here for clarity.
+products = [
+    {"id": 1, "name": "Laptop", "price": 1200},
+    {"id": 2, "name": "Mouse", "price": 25},
+    {"id": 3, "name": "Keyboard", "price": 75},
+]
+
+users = [
+    {
+        "id": 1,
+        "username": "admin",
+        "email": "admin@example.com",
+        "password": "password123",
+    }
+]
 
 
-# define a class for new users
-class CreateUserModel(BaseModel):
-    id: str
+# Define a class for new users
+class NewUser(BaseModel):
+    id: int | None = None
     username: str
     email: str
     password: str
 
 
-# define a class for existing users
-class ExistingUserModel(BaseModel):
+# Define a class for existing users
+class ExistingUser(BaseModel):
     username: str
     password: str
 
 
 app = FastAPI()
-# an empty list to store users
-users = []
+
+# An empty list to store users
+# This is defined above, so no need for this comment here
 
 
 @app.get("/")
@@ -64,7 +80,7 @@ def get_home():
     return {"message": "Welcome to our E-commerce API"}
 
 
-# lists of sample products
+# Lists of sample products
 @app.get("/products")
 def get_products():
     return {"products": products}
@@ -72,37 +88,49 @@ def get_products():
 
 @app.get("/products/{product_id}")
 def get_product_by_id(product_id: int):
-    # return {"product_id": product_id}
-    for product in products:
-        if product["id"] == product_id:
-            return {"products": product}
-    return {"error": "Product not found"}
+    # Use a list comprehension or a generator expression for a more Pythonic approach
+    product = next((p for p in products if p["id"] == product_id), None)
+    if product:
+        return {"products": product}
+    raise HTTPException(status_code=404, detail="Product not found")
 
 
-# registering new users
+# Registering new users
 @app.post("/register")
-def register_user(user: CreateUserModel):
-    # checks if user exists
+def register_user(user: NewUser):
+    # Check if a user with the same username or email already exists.
+    # We should raise an error immediately if either is a match.
     for existing_user in users:
-        # print(existing_user)
-        if (
-            existing_user["username"] == user["username"]
-            or existing_user["email"] == user["email"]
-        ):
-            return {"error": "Username or email alrealy exist"}
+        if existing_user["username"] == user.username:
+            raise HTTPException(
+                status_code=400,
+                detail=f"User with username '{user.username}' already registered.",
+            )
+        if existing_user["email"] == user.email:
+            raise HTTPException(
+                status_code=400,
+                detail=f"User with email '{user.email}' already registered.",
+            )
 
-        user["id"] = len(users) + 1
-        print("user successfully registered.")
-        users.append(user.model_dump())
-    return {"message": "User registered successfully"}
+    # Assign a new ID to the user and add them to the list.
+    # This logic should happen after the loop.
+    user_dict = user.model_dump()
+    user_dict["id"] = len(users) + 1
+    users.append(user_dict)
+
+    return {"message": "User registered successfully", "user": user_dict}
 
 
 @app.post("/login")
-def existing_user_login(login_information: ExistingUserModel):
+def existing_user_login(login_information: ExistingUser):
+    # Loop through all users to find a match.
     for existing_user in users:
         if (
-            existing_user["username"] != login_information["username"]
-            or existing_user["password"] != login_information["password"]
+            existing_user["username"] == login_information.username
+            and existing_user["password"] == login_information.password
         ):
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-    return {"message": "Login successful"}
+            return {"message": "Login successful"}
+
+    # If the loop completes without finding a match, raise the exception.
+    # This should be outside the loop, not inside.
+    raise HTTPException(status_code=401, detail="Invalid username or password")
