@@ -33,8 +33,11 @@
 # POST /checkout/{user_id} → return an order summary (cart items + total).
 
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
+from bson.objectid import ObjectId
+from db import products_collection
+from db import user_collection
 
 # Assume these are your data sources; they need to be defined
 # somewhere, e.g., in products.py and users.py
@@ -44,6 +47,8 @@ products = [
     {"id": 2, "name": "Mouse", "price": 25},
     {"id": 3, "name": "Keyboard", "price": 75},
 ]
+cart = []
+
 
 users = [
     {
@@ -53,6 +58,22 @@ users = [
         "password": "password123",
     }
 ]
+
+
+# Define class for items loaded in the cart
+class Product(BaseModel):
+    name: str
+    description: str
+    price: float
+    image: str
+    stock: int
+
+
+# Define a class for user cart
+class UserCart(BaseModel):
+    id: int | None = None
+    product_id: int
+    quantity: int
 
 
 # Define a class for new users
@@ -83,13 +104,26 @@ def get_home():
 # Lists of sample products
 @app.get("/products")
 def get_products():
-    return {"products": products}
+    products = products_collection.find().to_list()
+    tidy_products = []
+    # get all products from database
+    for product in products:
+        product["id"] = str(product["_id"])
+        del product["_id"]
+        tidy_products.append(product)
+    return {"products": tidy_products}
+
+
+@app.post("/products")
+def post_products(product: Product):
+    products_collection.insert_one(product.model_dump())
+    return {"message": "Product added succesfully."}
 
 
 @app.get("/products/{product_id}")
 def get_product_by_id(product_id: int):
     # Use a list comprehension or a generator expression for a more Pythonic approach
-    product = next((p for p in products if p["id"] == product_id), None)
+    product = products_collection.find_one({"_id": ObjectId(product_id)})
     if product:
         return {"products": product}
     raise HTTPException(status_code=404, detail="Product not found")
@@ -101,24 +135,22 @@ def register_user(user: NewUser):
     # Check if a user with the same username or email already exists.
     # We should raise an error immediately if either is a match.
     for existing_user in users:
-        if existing_user["username"] == user.username:
+        if (
+            existing_user["username"] == user.username
+            or existing_user["email"] == user.email
+        ):
             raise HTTPException(
-                status_code=400,
-                detail=f"User with username '{user.username}' already registered.",
-            )
-        if existing_user["email"] == user.email:
-            raise HTTPException(
-                status_code=400,
-                detail=f"User with email '{user.email}' already registered.",
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"User with username '{user.username}' and '{user.email}' already registered.",
             )
 
-    # Assign a new ID to the user and add them to the list.
-    # This logic should happen after the loop.
-    user_dict = user.model_dump()
-    user_dict["id"] = len(users) + 1
-    users.append(user_dict)
-
-    return {"message": "User registered successfully", "user": user_dict}
+        # Assign a new ID to the user and add them to the list.
+        # This logic should happen after the loop.
+        # user_dict = user.model_dump()
+        # user_dict["id"] = len(users) + 1
+        # users.append(user_dict)
+        user_collection.insert_one(user.model_dump())
+        return {"message": "User registered successfully", "user": user}
 
 
 @app.post("/login")
@@ -131,6 +163,32 @@ def existing_user_login(login_information: ExistingUser):
         ):
             return {"message": "Login successful"}
 
-    # If the loop completes without finding a match, raise the exception.
-    # This should be outside the loop, not inside.
-    raise HTTPException(status_code=401, detail="Invalid username or password")
+        # If the loop completes without finding a match, raise the exception.
+        # This should be outside the loop, not inside.
+        raise HTTPException(
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
+            detail="Invalid username or password",
+        )
+
+
+@app.post("/cart")
+def add_to_cart(user_cart: UserCart):
+    cart.append(user_cart.model_dump())
+
+    if user_cart.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be at least 1")
+
+    # Check if the product exists
+    product_exists = any(p["id"] == user_cart.product_id for p in products)
+    if not product_exists:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    return {"message": f"{user_cart.quantity} item(s) added to cart"}
+
+
+# @app.get("/cart/{user_id}")
+# def get_cart(user_id: str):
+#     users_cart_items = list(UserCart.find({"user_id": user_id}))
+#     items = [replace_cart_id(item) for item in users_cart_items]
+
+#     return {"cart_items": items}
