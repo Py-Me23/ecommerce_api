@@ -1,3 +1,5 @@
-users= [{"id"=1, "Abena", "sexy@gmail.com", "kilted", }
-       {"id"= 2, "Gifty", "gifty@gmail.com", "lolu", }
-       {"id"= 3, "Lois", "loil@gmail.com", "police", }]
+users_info = [
+    {"id": 1, "username": "Abena", "email": "sexy@gmail.com", "password": "kilted"},
+    {"id": 2, "username": "Gina", "email": "lok@gmail.com", "password": "police"},
+    {"id": 3, "username": "Kwame", "email": "little@gmail.com", "password": "mint"},
+]
