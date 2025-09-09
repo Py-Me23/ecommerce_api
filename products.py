@@ -27,4 +27,11 @@ products = [
         "price": "Ghc 150.00",
         "image": "url(...)",
     },
+    {
+        "id": 5,
+        "name": "Baseball",
+        "description": "maroon",
+        "price": "Ghc 150.00",
+        "image": "url(...)",
+    },
 ]
